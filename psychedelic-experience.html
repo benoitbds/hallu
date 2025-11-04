@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voyage Psychédélique - Expérience Transcendantale</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        body {
+            background: #000;
+            font-family: 'Courier New', monospace;
+        }
+
+        #canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            cursor: crosshair;
+        }
+
+        #controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            color: #0ff;
+            border: 2px solid #0ff;
+            box-shadow: 0 0 20px #0ff;
+            z-index: 100;
+            font-size: 12px;
+        }
+
+        #controls button {
+            background: rgba(0, 255, 255, 0.2);
+            border: 1px solid #0ff;
+            color: #0ff;
+            padding: 8px 15px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            transition: all 0.3s;
+        }
+
+        #controls button:hover {
+            background: rgba(0, 255, 255, 0.4);
+            box-shadow: 0 0 10px #0ff;
+        }
+
+        #controls label {
+            display: block;
+            margin: 10px 0 5px 0;
+        }
+
+        #controls input[type="range"] {
+            width: 100%;
+            margin: 5px 0;
+        }
+
+        .instruction {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(0, 255, 255, 0.6);
+            font-size: 14px;
+            text-align: center;
+            text-shadow: 0 0 10px #0ff;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div id="controls">
+        <h3 style="margin-bottom: 10px;">◈ CONTRÔLES ◈</h3>
+        <button id="toggleSound">🔊 Activer Son</button>
+        <button id="toggleMantra">🕉️ Mantra OM</button>
+        <label>Vitesse: <span id="speedValue">1.0</span>x</label>
+        <input type="range" id="speed" min="0.1" max="3" step="0.1" value="1">
+        <label>Intensité: <span id="intensityValue">1.0</span></label>
+        <input type="range" id="intensity" min="0.5" max="2" step="0.1" value="1">
+        <label>Particules: <span id="particleValue">300</span></label>
+        <input type="range" id="particleCount" min="100" max="1000" step="50" value="300">
+    </div>
+
+    <div class="instruction">
+        ✦ Déplacez la souris pour influencer l'énergie ✦<br>
+        ✦ Cliquez pour générer des ondes cosmiques ✦
+    </div>
+
+    <script>
+        // Configuration Canvas
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+
+        // Variables globales
+        let time = 0;
+        let mouseX = width / 2;
+        let mouseY = height / 2;
+        let clickWaves = [];
+        let particles = [];
+        let speedMultiplier = 1;
+        let intensityMultiplier = 1;
+        let particleTarget = 300;
+
+        // Audio Context
+        let audioContext;
+        let oscillator;
+        let gainNode;
+        let isAudioEnabled = false;
+        let isMantraPlaying = false;
+
+        // Palette bioluminescente
+        const colors = {
+            cyan: '#00ffff',
+            purple: '#8b00ff',
+            magenta: '#ff00ff',
+            emerald: '#00ff88',
+            cobalt: '#0066ff',
+            orange: '#ff6600',
+            pink: '#ff0088'
+        };
+
+        // Classe Particule
+        class Particle {
+            constructor() {
+                this.reset();
+                this.life = Math.random();
+            }
+
+            reset() {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = Math.random() * Math.max(width, height) * 0.5;
+                this.x = width / 2 + Math.cos(angle) * radius;
+                this.y = height / 2 + Math.sin(angle) * radius;
+                this.z = Math.random() * 1000;
+                this.baseSize = Math.random() * 2 + 1;
+                this.colorIndex = Math.floor(Math.random() * Object.keys(colors).length);
+                this.speed = Math.random() * 0.5 + 0.2;
+                this.orbitRadius = Math.random() * 100 + 50;
+                this.orbitSpeed = Math.random() * 0.02 + 0.01;
+                this.orbitAngle = Math.random() * Math.PI * 2;
+                this.life = 1;
+            }
+
+            update() {
+                // Mouvement orbital
+                this.orbitAngle += this.orbitSpeed * speedMultiplier;
+
+                // Attraction vers la souris
+                const dx = mouseX - this.x;
+                const dy = mouseY - this.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance > 1) {
+                    this.x += (dx / distance) * this.speed * 0.5;
+                    this.y += (dy / distance) * this.speed * 0.5;
+                }
+
+                // Mouvement en Z (profondeur)
+                this.z -= this.speed * 2 * speedMultiplier;
+                if (this.z < 1) {
+                    this.reset();
+                }
+
+                // Pulsation de vie
+                this.life += Math.sin(time * 2 + this.orbitAngle) * 0.01;
+                this.life = Math.max(0.3, Math.min(1, this.life));
+            }
+
+            draw() {
+                const scale = 1000 / (1000 + this.z);
+                const x = (this.x - width / 2) * scale + width / 2;
+                const y = (this.y - height / 2) * scale + height / 2;
+                const size = this.baseSize * scale * intensityMultiplier;
+
+                if (x < -50 || x > width + 50 || y < -50 || y > height + 50) return;
+
+                const colorKeys = Object.keys(colors);
+                const color = colors[colorKeys[this.colorIndex]];
+
+                // Glow effect
+                ctx.shadowBlur = 20 * this.life * intensityMultiplier;
+                ctx.shadowColor = color;
+
+                ctx.fillStyle = color;
+                ctx.globalAlpha = this.life * 0.8;
+                ctx.beginPath();
+                ctx.arc(x, y, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // Initialisation des particules
+        function initParticles() {
+            particles = [];
+            for (let i = 0; i < particleTarget; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        // Dessiner un mandala
+        function drawMandala(centerX, centerY, radius, petals, rotation) {
+            const colorKeys = Object.keys(colors);
+
+            for (let i = 0; i < petals; i++) {
+                const angle = (Math.PI * 2 / petals) * i + rotation;
+                const x = centerX + Math.cos(angle) * radius;
+                const y = centerY + Math.sin(angle) * radius;
+
+                const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius / 3);
+                gradient.addColorStop(0, colors[colorKeys[i % colorKeys.length]]);
+                gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+                ctx.fillStyle = gradient;
+                ctx.shadowBlur = 30;
+                ctx.shadowColor = colors[colorKeys[i % colorKeys.length]];
+
+                ctx.beginPath();
+                ctx.arc(x, y, radius / 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Liens entre les pétales
+                ctx.strokeStyle = colors[colorKeys[i % colorKeys.length]];
+                ctx.lineWidth = 2;
+                ctx.globalAlpha = 0.3;
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            }
+        }
+
+        // Spirale de Fibonacci
+        function drawFibonacciSpiral(centerX, centerY, scale, rotation) {
+            ctx.strokeStyle = colors.emerald;
+            ctx.lineWidth = 3;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = colors.emerald;
+            ctx.globalAlpha = 0.6;
+
+            ctx.beginPath();
+            const points = 200;
+            const phi = (1 + Math.sqrt(5)) / 2;
+
+            for (let i = 0; i < points; i++) {
+                const angle = rotation + i * 0.1;
+                const radius = scale * Math.pow(phi, i / 50);
+                const x = centerX + Math.cos(angle) * radius;
+                const y = centerY + Math.sin(angle) * radius;
+
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+        }
+
+        // Tunnel infini
+        function drawTunnel() {
+            const layers = 15;
+            const colorKeys = Object.keys(colors);
+
+            for (let i = 0; i < layers; i++) {
+                const progress = i / layers;
+                const radius = (1 - progress) * Math.max(width, height) * 0.8;
+                const rotation = time * 0.5 + progress * Math.PI * 2;
+                const sides = 6;
+
+                ctx.globalAlpha = 0.1 + progress * 0.3;
+                ctx.strokeStyle = colors[colorKeys[Math.floor(progress * colorKeys.length)]];
+                ctx.lineWidth = 3;
+                ctx.shadowBlur = 40;
+                ctx.shadowColor = ctx.strokeStyle;
+
+                ctx.beginPath();
+                for (let j = 0; j <= sides; j++) {
+                    const angle = (Math.PI * 2 / sides) * j + rotation;
+                    const x = width / 2 + Math.cos(angle) * radius;
+                    const y = height / 2 + Math.sin(angle) * radius;
+
+                    if (j === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                ctx.closePath();
+                ctx.stroke();
+            }
+        }
+
+        // Fleur de vie
+        function drawFlowerOfLife(centerX, centerY, radius, rotation) {
+            const circles = 7;
+            const colorKeys = Object.keys(colors);
+
+            ctx.globalAlpha = 0.3;
+            ctx.lineWidth = 2;
+
+            // Centre
+            ctx.strokeStyle = colors.cyan;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = colors.cyan;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Cercles autour
+            for (let i = 0; i < 6; i++) {
+                const angle = (Math.PI * 2 / 6) * i + rotation;
+                const x = centerX + Math.cos(angle) * radius;
+                const y = centerY + Math.sin(angle) * radius;
+
+                ctx.strokeStyle = colors[colorKeys[i % colorKeys.length]];
+                ctx.shadowColor = ctx.strokeStyle;
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+
+        // Ondes de choc
+        function drawClickWaves() {
+            clickWaves = clickWaves.filter(wave => {
+                wave.radius += 5 * speedMultiplier;
+                wave.alpha -= 0.02 * speedMultiplier;
+
+                if (wave.alpha <= 0) return false;
+
+                const gradient = ctx.createRadialGradient(wave.x, wave.y, 0, wave.x, wave.y, wave.radius);
+                gradient.addColorStop(0, 'rgba(0, 255, 255, 0)');
+                gradient.addColorStop(0.5, `rgba(255, 0, 255, ${wave.alpha})`);
+                gradient.addColorStop(1, 'rgba(0, 255, 255, 0)');
+
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = 3;
+                ctx.shadowBlur = 30;
+                ctx.shadowColor = colors.magenta;
+                ctx.globalAlpha = wave.alpha;
+                ctx.beginPath();
+                ctx.arc(wave.x, wave.y, wave.radius, 0, Math.PI * 2);
+                ctx.stroke();
+
+                return true;
+            });
+        }
+
+        // Aura énergétique
+        function drawAura() {
+            const pulseSize = Math.sin(time * 2) * 50 + 100;
+            const gradient = ctx.createRadialGradient(
+                width / 2, height / 2, 0,
+                width / 2, height / 2, pulseSize * intensityMultiplier
+            );
+
+            gradient.addColorStop(0, 'rgba(138, 43, 226, 0.1)');
+            gradient.addColorStop(0.5, 'rgba(255, 0, 255, 0.05)');
+            gradient.addColorStop(1, 'rgba(0, 255, 255, 0)');
+
+            ctx.fillStyle = gradient;
+            ctx.globalAlpha = 0.5;
+            ctx.fillRect(0, 0, width, height);
+        }
+
+        // Animation principale
+        function animate() {
+            requestAnimationFrame(animate);
+
+            time += 0.01 * speedMultiplier;
+
+            // Fond avec trail effect
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+            ctx.globalAlpha = 1;
+            ctx.fillRect(0, 0, width, height);
+
+            // Aura de fond
+            drawAura();
+
+            // Tunnel
+            ctx.globalAlpha = 0.4;
+            drawTunnel();
+
+            // Géométrie sacrée centrale
+            const centerPulse = Math.sin(time) * 20 + 120;
+
+            ctx.globalAlpha = 0.7;
+            drawFlowerOfLife(width / 2, height / 2, centerPulse, time * 0.3);
+
+            ctx.globalAlpha = 0.8;
+            drawFibonacciSpiral(width / 2, height / 2, 2, time * 0.5);
+
+            // Mandalas multiples
+            const numMandalas = 3;
+            for (let i = 0; i < numMandalas; i++) {
+                const angle = (Math.PI * 2 / numMandalas) * i + time * 0.2;
+                const distance = 200 + Math.sin(time + i) * 50;
+                const x = width / 2 + Math.cos(angle) * distance;
+                const y = height / 2 + Math.sin(angle) * distance;
+                const petals = 8 + i * 2;
+
+                ctx.globalAlpha = 0.5;
+                drawMandala(x, y, 60, petals, time * 0.5 + i);
+            }
+
+            // Particules
+            ctx.globalAlpha = 1;
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+
+            // Gestion du nombre de particules
+            while (particles.length < particleTarget) {
+                particles.push(new Particle());
+            }
+            while (particles.length > particleTarget) {
+                particles.pop();
+            }
+
+            // Ondes de choc
+            ctx.globalAlpha = 1;
+            drawClickWaves();
+
+            // Reset des effets
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = 1;
+        }
+
+        // Audio - Mantra OM
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playMantra() {
+            if (!isAudioEnabled || isMantraPlaying) return;
+
+            initAudio();
+            isMantraPlaying = true;
+
+            // Oscillateur pour fréquence OM (136.1 Hz - OM primordial)
+            oscillator = audioContext.createOscillator();
+            gainNode = audioContext.createGain();
+
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(136.1, audioContext.currentTime);
+
+            // Modulation pour effet mystique
+            const lfo = audioContext.createOscillator();
+            lfo.frequency.value = 0.5;
+            const lfoGain = audioContext.createGain();
+            lfoGain.gain.value = 10;
+
+            lfo.connect(lfoGain);
+            lfoGain.connect(oscillator.frequency);
+
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 2);
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.start();
+            lfo.start();
+
+            document.getElementById('toggleMantra').textContent = '🕉️ Mantra ON';
+        }
+
+        function stopMantra() {
+            if (oscillator && isMantraPlaying) {
+                gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 1);
+                setTimeout(() => {
+                    oscillator.stop();
+                    isMantraPlaying = false;
+                    document.getElementById('toggleMantra').textContent = '🕉️ Mantra OM';
+                }, 1000);
+            }
+        }
+
+        // Event Listeners
+        canvas.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+
+        canvas.addEventListener('click', (e) => {
+            clickWaves.push({
+                x: e.clientX,
+                y: e.clientY,
+                radius: 0,
+                alpha: 1
+            });
+
+            // Son de clic
+            if (isAudioEnabled && audioContext) {
+                const clickOsc = audioContext.createOscillator();
+                const clickGain = audioContext.createGain();
+
+                clickOsc.frequency.setValueAtTime(528, audioContext.currentTime); // Fréquence 528 Hz (transformation/miracles)
+                clickGain.gain.setValueAtTime(0.1, audioContext.currentTime);
+                clickGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+                clickOsc.connect(clickGain);
+                clickGain.connect(audioContext.destination);
+
+                clickOsc.start();
+                clickOsc.stop(audioContext.currentTime + 0.5);
+            }
+        });
+
+        document.getElementById('toggleSound').addEventListener('click', () => {
+            isAudioEnabled = !isAudioEnabled;
+            if (isAudioEnabled) {
+                initAudio();
+                document.getElementById('toggleSound').textContent = '🔊 Son ON';
+            } else {
+                stopMantra();
+                document.getElementById('toggleSound').textContent = '🔇 Son OFF';
+            }
+        });
+
+        document.getElementById('toggleMantra').addEventListener('click', () => {
+            if (!isAudioEnabled) {
+                alert('Activez d\'abord le son !');
+                return;
+            }
+
+            if (isMantraPlaying) {
+                stopMantra();
+            } else {
+                playMantra();
+            }
+        });
+
+        document.getElementById('speed').addEventListener('input', (e) => {
+            speedMultiplier = parseFloat(e.target.value);
+            document.getElementById('speedValue').textContent = speedMultiplier.toFixed(1) + 'x';
+        });
+
+        document.getElementById('intensity').addEventListener('input', (e) => {
+            intensityMultiplier = parseFloat(e.target.value);
+            document.getElementById('intensityValue').textContent = intensityMultiplier.toFixed(1);
+        });
+
+        document.getElementById('particleCount').addEventListener('input', (e) => {
+            particleTarget = parseInt(e.target.value);
+            document.getElementById('particleValue').textContent = particleTarget;
+        });
+
+        window.addEventListener('resize', () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        });
+
+        // Démarrage
+        initParticles();
+        animate();
+
+        console.log('%c✦ VOYAGE PSYCHÉDÉLIQUE INITIALISÉ ✦', 'color: #0ff; font-size: 20px; text-shadow: 0 0 10px #0ff');
+        console.log('%cUtilisez les contrôles pour modifier l\'expérience', 'color: #f0f; font-size: 14px');
+    </script>
+</body>
+</html>
