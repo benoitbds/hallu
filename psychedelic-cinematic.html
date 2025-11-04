@@ -115,6 +115,21 @@
             font-size: 24px;
             text-shadow: 0 0 20px #0ff;
             z-index: 1000;
+            text-align: center;
+            line-height: 1.6;
+        }
+
+        #loading a {
+            color: #0ff;
+            text-decoration: none;
+            border-bottom: 1px solid #0ff;
+            transition: all 0.3s;
+        }
+
+        #loading a:hover {
+            color: #ff00ff;
+            border-bottom-color: #ff00ff;
+            text-shadow: 0 0 10px #ff00ff;
         }
     </style>
 </head>
@@ -502,14 +517,28 @@
     <script>
         // WebGL Setup
         const canvas = document.getElementById('canvas');
-        const gl = canvas.getContext('webgl', {
+        let gl = canvas.getContext('webgl2', {
             alpha: false,
             antialias: true,
             preserveDrawingBuffer: false
         });
 
+        // Fallback to WebGL 1
         if (!gl) {
-            alert('WebGL non supporté !');
+            gl = canvas.getContext('webgl', {
+                alpha: false,
+                antialias: true,
+                preserveDrawingBuffer: false
+            });
+        }
+
+        if (!gl) {
+            document.getElementById('loading').innerHTML =
+                '❌ ERREUR : WebGL non supporté<br><br>' +
+                'Votre navigateur ne supporte pas WebGL.<br>' +
+                'Essayez avec Chrome, Firefox ou Edge.<br><br>' +
+                '<a href="psychedelic-experience.html" style="color: #0ff;">→ Version classique (Canvas 2D)</a>';
+            throw new Error('WebGL not supported');
         }
 
         let width = canvas.width = window.innerWidth;
@@ -540,9 +569,12 @@
             gl.compileShader(shader);
 
             if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-                console.error('Shader compilation error:', gl.getShaderInfoLog(shader));
+                const error = gl.getShaderInfoLog(shader);
+                console.error('Shader compilation error:', error);
+                document.getElementById('loading').innerHTML =
+                    '❌ ERREUR Shader<br><br>' + error.substring(0, 200);
                 gl.deleteShader(shader);
-                return null;
+                throw new Error('Shader compilation failed');
             }
 
             return shader;
@@ -559,28 +591,42 @@
             gl.linkProgram(program);
 
             if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-                console.error('Program link error:', gl.getProgramInfoLog(program));
-                return null;
+                const error = gl.getProgramInfoLog(program);
+                console.error('Program link error:', error);
+                document.getElementById('loading').innerHTML =
+                    '❌ ERREUR Link<br><br>' + error.substring(0, 200);
+                throw new Error('Program linking failed');
             }
 
             return program;
         }
 
-        // Get shader sources
-        const vertexSource = document.getElementById('vertex-shader').textContent;
-        const mainFragmentSource = document.getElementById('fragment-shader').textContent;
-        const bloomExtractSource = document.getElementById('bloom-extract-shader').textContent;
-        const blurSource = document.getElementById('blur-shader').textContent;
-        const compositeSource = document.getElementById('composite-shader').textContent;
+        // Initialize shaders and programs
+        let mainProgram, bloomExtractProgram, blurProgram, compositeProgram;
+        let quadBuffer, sceneFB, bloomExtractFB, bloomBlurFB1, bloomBlurFB2;
 
-        // Create programs
-        const mainProgram = createProgram(vertexSource, mainFragmentSource);
-        const bloomExtractProgram = createProgram(vertexSource, bloomExtractSource);
-        const blurProgram = createProgram(vertexSource, blurSource);
-        const compositeProgram = createProgram(vertexSource, compositeSource);
+        try {
+            // Get shader sources
+            const vertexSource = document.getElementById('vertex-shader').textContent;
+            const mainFragmentSource = document.getElementById('fragment-shader').textContent;
+            const bloomExtractSource = document.getElementById('bloom-extract-shader').textContent;
+            const blurSource = document.getElementById('blur-shader').textContent;
+            const compositeSource = document.getElementById('composite-shader').textContent;
+
+            // Create programs
+            console.log('Compiling shaders...');
+            mainProgram = createProgram(vertexSource, mainFragmentSource);
+            bloomExtractProgram = createProgram(vertexSource, bloomExtractSource);
+            blurProgram = createProgram(vertexSource, blurSource);
+            compositeProgram = createProgram(vertexSource, compositeSource);
+            console.log('Shaders compiled successfully');
+        } catch (error) {
+            console.error('Initialization failed:', error);
+            throw error;
+        }
 
         // Create quad buffer
-        const quadBuffer = gl.createBuffer();
+        quadBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
             -1, -1,  1, -1,  -1, 1,
@@ -608,10 +654,10 @@
             return { framebuffer, texture };
         }
 
-        let sceneFB = createFramebuffer(width, height);
-        let bloomExtractFB = createFramebuffer(width / 2, height / 2);
-        let bloomBlurFB1 = createFramebuffer(width / 2, height / 2);
-        let bloomBlurFB2 = createFramebuffer(width / 2, height / 2);
+        sceneFB = createFramebuffer(width, height);
+        bloomExtractFB = createFramebuffer(width / 2, height / 2);
+        bloomBlurFB1 = createFramebuffer(width / 2, height / 2);
+        bloomBlurFB2 = createFramebuffer(width / 2, height / 2);
 
         // Render function
         function render(program, framebuffer, setup) {
@@ -837,12 +883,22 @@
             bloomBlurFB2 = createFramebuffer(width / 2, height / 2);
         });
 
-        // Start
-        document.getElementById('loading').style.display = 'none';
-        animate();
+        // Start - wrapped in try-catch for error handling
+        try {
+            console.log('Starting animation...');
+            document.getElementById('loading').style.display = 'none';
+            animate();
 
-        console.log('%c✧ CINEMATIC PSYCHEDELIC EXPERIENCE ✧', 'color: #0ff; font-size: 24px; text-shadow: 0 0 10px #0ff; font-weight: bold');
-        console.log('%cWebGL Raymarching | HDR Bloom | ACES Tonemapping | Chromatic Aberration', 'color: #f0f; font-size: 14px');
+            console.log('%c✧ CINEMATIC PSYCHEDELIC EXPERIENCE ✧', 'color: #0ff; font-size: 24px; text-shadow: 0 0 10px #0ff; font-weight: bold');
+            console.log('%cWebGL Raymarching | HDR Bloom | ACES Tonemapping | Chromatic Aberration', 'color: #f0f; font-size: 14px');
+        } catch (error) {
+            console.error('Failed to start animation:', error);
+            document.getElementById('loading').innerHTML =
+                '❌ ERREUR d\'initialisation<br><br>' +
+                'Une erreur est survenue.<br>' +
+                'Vérifiez la console pour plus de détails.<br><br>' +
+                '<a href="psychedelic-experience.html">→ Version classique (Canvas 2D)</a>';
+        }
     </script>
 </body>
 </html>
