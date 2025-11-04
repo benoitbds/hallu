@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Psychedelic Journey - Cinematic Experience</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        body {
+            background: #000;
+            font-family: 'Courier New', monospace;
+        }
+
+        #canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 20px;
+            border-radius: 12px;
+            color: #0ff;
+            border: 2px solid rgba(0, 255, 255, 0.3);
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
+            z-index: 100;
+            font-size: 11px;
+            backdrop-filter: blur(10px);
+            max-width: 220px;
+        }
+
+        #controls h3 {
+            margin-bottom: 12px;
+            font-size: 13px;
+            text-align: center;
+            color: #0ff;
+            text-shadow: 0 0 10px #0ff;
+        }
+
+        #controls button {
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid rgba(0, 255, 255, 0.4);
+            color: #0ff;
+            padding: 8px 12px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+            transition: all 0.3s;
+            width: calc(100% - 4px);
+        }
+
+        #controls button:hover {
+            background: rgba(0, 255, 255, 0.3);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+            transform: translateY(-1px);
+        }
+
+        #controls button.active {
+            background: rgba(0, 255, 255, 0.4);
+            border-color: #0ff;
+        }
+
+        #controls label {
+            display: block;
+            margin: 10px 0 4px 0;
+            font-size: 10px;
+            color: rgba(0, 255, 255, 0.8);
+        }
+
+        #controls input[type="range"] {
+            width: 100%;
+            margin: 5px 0;
+        }
+
+        .value-display {
+            color: #ff00ff;
+            font-weight: bold;
+        }
+
+        .instruction {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(0, 255, 255, 0.7);
+            font-size: 13px;
+            text-align: center;
+            text-shadow: 0 0 15px #0ff;
+            animation: pulse 3s infinite ease-in-out;
+            max-width: 80%;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; transform: translateX(-50%) scale(0.98); }
+            50% { opacity: 1; transform: translateX(-50%) scale(1); }
+        }
+
+        #loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #0ff;
+            font-size: 24px;
+            text-shadow: 0 0 20px #0ff;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">◈ INITIALISATION ◈</div>
+    <canvas id="canvas"></canvas>
+
+    <div id="controls">
+        <h3>◈ CINEMATIC CONTROLS ◈</h3>
+
+        <button id="toggleSound">🔊 Activer Audio</button>
+        <button id="toggleMantra">🕉️ Mantra OM</button>
+
+        <label>Vitesse: <span class="value-display" id="speedValue">1.0</span>x</label>
+        <input type="range" id="speed" min="0.1" max="3" step="0.1" value="1">
+
+        <label>Intensité: <span class="value-display" id="intensityValue">1.5</span></label>
+        <input type="range" id="intensity" min="0.5" max="3" step="0.1" value="1.5">
+
+        <label>Bloom: <span class="value-display" id="bloomValue">0.8</span></label>
+        <input type="range" id="bloom" min="0" max="2" step="0.1" value="0.8">
+
+        <label>Aberration: <span class="value-display" id="aberrationValue">0.5</span></label>
+        <input type="range" id="aberration" min="0" max="1" step="0.05" value="0.5">
+
+        <label>Scene: <span class="value-display" id="sceneValue">Tunnel</span></label>
+        <button id="prevScene">◀ Précédent</button>
+        <button id="nextScene">Suivant ▶</button>
+    </div>
+
+    <div class="instruction">
+        ✦ Déplacez la souris pour naviguer dans les dimensions ✦<br>
+        ✦ Cliquez pour créer des perturbations quantiques ✦
+    </div>
+
+    <script id="vertex-shader" type="x-shader/x-vertex">
+        attribute vec2 a_position;
+        void main() {
+            gl_Position = vec4(a_position, 0.0, 1.0);
+        }
+    </script>
+
+    <script id="fragment-shader" type="x-shader/x-fragment">
+        precision highp float;
+
+        uniform vec2 u_resolution;
+        uniform float u_time;
+        uniform vec2 u_mouse;
+        uniform float u_intensity;
+        uniform int u_scene;
+
+        #define PI 3.14159265359
+        #define TAU 6.28318530718
+
+        // Rotation matrix
+        mat2 rot(float a) {
+            float c = cos(a), s = sin(a);
+            return mat2(c, -s, s, c);
+        }
+
+        // Smooth min for blending shapes
+        float smin(float a, float b, float k) {
+            float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+            return mix(b, a, h) - k * h * (1.0 - h);
+        }
+
+        // Palette function for psychedelic colors
+        vec3 palette(float t) {
+            vec3 a = vec3(0.5, 0.5, 0.5);
+            vec3 b = vec3(0.5, 0.5, 0.5);
+            vec3 c = vec3(1.0, 1.0, 1.0);
+            vec3 d = vec3(0.0, 0.33, 0.67);
+            return a + b * cos(TAU * (c * t + d));
+        }
+
+        // Enhanced palette with bioluminescent colors
+        vec3 biolumPalette(float t) {
+            vec3 cyan = vec3(0.0, 1.0, 1.0);
+            vec3 magenta = vec3(1.0, 0.0, 1.0);
+            vec3 purple = vec3(0.6, 0.0, 1.0);
+            vec3 emerald = vec3(0.0, 1.0, 0.5);
+
+            float cycle = fract(t);
+            if (cycle < 0.25) return mix(cyan, magenta, cycle * 4.0);
+            if (cycle < 0.5) return mix(magenta, purple, (cycle - 0.25) * 4.0);
+            if (cycle < 0.75) return mix(purple, emerald, (cycle - 0.5) * 4.0);
+            return mix(emerald, cyan, (cycle - 0.75) * 4.0);
+        }
+
+        // Distance field for sphere
+        float sdSphere(vec3 p, float r) {
+            return length(p) - r;
+        }
+
+        // Distance field for box
+        float sdBox(vec3 p, vec3 b) {
+            vec3 q = abs(p) - b;
+            return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
+        }
+
+        // Distance field for torus
+        float sdTorus(vec3 p, vec2 t) {
+            vec2 q = vec2(length(p.xz) - t.x, p.y);
+            return length(q) - t.y;
+        }
+
+        // Mandelbulb distance estimation
+        float mandelbulb(vec3 pos) {
+            vec3 z = pos;
+            float dr = 1.0;
+            float r = 0.0;
+            float power = 8.0;
+
+            for (int i = 0; i < 8; i++) {
+                r = length(z);
+                if (r > 2.0) break;
+
+                float theta = acos(z.z / r);
+                float phi = atan(z.y, z.x);
+                dr = pow(r, power - 1.0) * power * dr + 1.0;
+
+                float zr = pow(r, power);
+                theta = theta * power;
+                phi = phi * power;
+
+                z = zr * vec3(sin(theta) * cos(phi), sin(phi) * sin(theta), cos(theta));
+                z += pos;
+            }
+            return 0.5 * log(r) * r / dr;
+        }
+
+        // Fractal tunnel scene
+        float tunnelScene(vec3 p) {
+            p.xy *= rot(p.z * 0.1 + u_time * 0.3);
+
+            float tunnel = -sdBox(p, vec3(3.0, 3.0, 100.0));
+
+            vec3 rep = vec3(2.0, 2.0, 3.0);
+            vec3 q = mod(p + 0.5 * rep, rep) - 0.5 * rep;
+
+            float sphere = sdSphere(q, 0.3 + 0.1 * sin(u_time + p.z * 0.5));
+
+            return smin(tunnel, sphere, 0.5);
+        }
+
+        // Kaleidoscope scene
+        float kaleidoscopeScene(vec3 p) {
+            float angle = PI / 6.0;
+
+            for (int i = 0; i < 6; i++) {
+                p.xy = abs(p.xy);
+                p.xy *= rot(-angle);
+            }
+
+            float box = sdBox(p - vec3(0, 1, 0), vec3(0.2, 2.0, 0.2));
+            float sphere = sdSphere(p - vec3(0, 0, sin(u_time) * 2.0), 0.5);
+
+            return smin(box, sphere, 0.3);
+        }
+
+        // Morphing geometry scene
+        float morphScene(vec3 p) {
+            float morph = sin(u_time * 0.5) * 0.5 + 0.5;
+
+            p.xy *= rot(u_time * 0.2);
+            p.yz *= rot(u_time * 0.3);
+
+            float sphere = sdSphere(p, 1.5);
+            float box = sdBox(p, vec3(1.3));
+            float torus = sdTorus(p, vec2(1.2, 0.4));
+
+            float shape1 = mix(sphere, box, morph);
+            float shape2 = mix(box, torus, fract(morph + 0.5));
+
+            return smin(shape1, shape2, 0.5);
+        }
+
+        // Fractal mandelbulb scene
+        float fractalScene(vec3 p) {
+            p *= 0.5;
+            p.xz *= rot(u_time * 0.1);
+            return mandelbulb(p) * 2.0;
+        }
+
+        // Main scene selector
+        float map(vec3 p) {
+            if (u_scene == 0) return tunnelScene(p);
+            if (u_scene == 1) return kaleidoscopeScene(p);
+            if (u_scene == 2) return morphScene(p);
+            return fractalScene(p);
+        }
+
+        // Calculate normal using gradient
+        vec3 calcNormal(vec3 p) {
+            vec2 e = vec2(0.001, 0.0);
+            return normalize(vec3(
+                map(p + e.xyy) - map(p - e.xyy),
+                map(p + e.yxy) - map(p - e.yxy),
+                map(p + e.yyx) - map(p - e.yyx)
+            ));
+        }
+
+        // Raymarching
+        float raymarch(vec3 ro, vec3 rd) {
+            float t = 0.0;
+            for (int i = 0; i < 80; i++) {
+                vec3 p = ro + rd * t;
+                float d = map(p);
+                if (d < 0.001 || t > 50.0) break;
+                t += d * 0.8;
+            }
+            return t;
+        }
+
+        // Volumetric lighting
+        float volumetric(vec3 ro, vec3 rd, float maxDist) {
+            float sum = 0.0;
+            float t = 0.0;
+            for (int i = 0; i < 20; i++) {
+                vec3 p = ro + rd * t;
+                float density = 0.1 / (1.0 + abs(map(p)));
+                sum += density;
+                t += maxDist / 20.0;
+            }
+            return sum * 0.05;
+        }
+
+        void main() {
+            vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution.xy) / u_resolution.y;
+            vec2 mouseUV = u_mouse / u_resolution.xy - 0.5;
+
+            // Camera setup
+            vec3 ro = vec3(0.0, 0.0, u_time * 2.0);
+            vec3 lookAt = ro + vec3(mouseUV.x * 2.0, mouseUV.y * 2.0, 1.0);
+
+            vec3 forward = normalize(lookAt - ro);
+            vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), forward));
+            vec3 up = cross(forward, right);
+
+            vec3 rd = normalize(forward + uv.x * right + uv.y * up);
+
+            // Raymarch
+            float t = raymarch(ro, rd);
+            vec3 p = ro + rd * t;
+
+            // Initialize color
+            vec3 col = vec3(0.0);
+
+            if (t < 50.0) {
+                // Hit surface
+                vec3 normal = calcNormal(p);
+
+                // Lighting
+                vec3 lightPos = ro + vec3(2.0, 2.0, 0.0);
+                vec3 lightDir = normalize(lightPos - p);
+                float diff = max(dot(normal, lightDir), 0.0);
+
+                // Fresnel effect
+                float fresnel = pow(1.0 - max(dot(-rd, normal), 0.0), 3.0);
+
+                // Color based on position and time
+                float colorPhase = length(p) * 0.1 + u_time * 0.5;
+                vec3 baseColor = biolumPalette(colorPhase);
+
+                // Combine lighting
+                col = baseColor * (diff * 0.5 + 0.5);
+                col += fresnel * palette(colorPhase + 0.5) * u_intensity;
+
+                // Ambient occlusion
+                float ao = 1.0 - float(80) / 80.0;
+                col *= ao * 0.5 + 0.5;
+            }
+
+            // Add volumetric lighting
+            float vol = volumetric(ro, rd, min(t, 50.0));
+            col += biolumPalette(u_time * 0.2) * vol * u_intensity;
+
+            // Background glow
+            if (t >= 50.0) {
+                float glow = 0.05 / (0.01 + length(uv));
+                col += palette(length(uv) * 2.0 + u_time * 0.3) * glow * u_intensity;
+            }
+
+            gl_FragColor = vec4(col, 1.0);
+        }
+    </script>
+
+    <script id="bloom-extract-shader" type="x-shader/x-fragment">
+        precision highp float;
+        uniform sampler2D u_texture;
+        uniform vec2 u_resolution;
+        uniform float u_threshold;
+
+        void main() {
+            vec2 uv = gl_FragCoord.xy / u_resolution;
+            vec4 color = texture2D(u_texture, uv);
+
+            // Extract bright areas
+            float brightness = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
+            if (brightness > u_threshold) {
+                gl_FragColor = color;
+            } else {
+                gl_FragColor = vec4(0.0);
+            }
+        }
+    </script>
+
+    <script id="blur-shader" type="x-shader/x-fragment">
+        precision highp float;
+        uniform sampler2D u_texture;
+        uniform vec2 u_resolution;
+        uniform vec2 u_direction;
+
+        void main() {
+            vec2 uv = gl_FragCoord.xy / u_resolution;
+            vec4 color = vec4(0.0);
+            vec2 off1 = vec2(1.3846153846) * u_direction;
+            vec2 off2 = vec2(3.2307692308) * u_direction;
+
+            color += texture2D(u_texture, uv) * 0.2270270270;
+            color += texture2D(u_texture, uv + (off1 / u_resolution)) * 0.3162162162;
+            color += texture2D(u_texture, uv - (off1 / u_resolution)) * 0.3162162162;
+            color += texture2D(u_texture, uv + (off2 / u_resolution)) * 0.0702702703;
+            color += texture2D(u_texture, uv - (off2 / u_resolution)) * 0.0702702703;
+
+            gl_FragColor = color;
+        }
+    </script>
+
+    <script id="composite-shader" type="x-shader/x-fragment">
+        precision highp float;
+        uniform sampler2D u_scene;
+        uniform sampler2D u_bloom;
+        uniform vec2 u_resolution;
+        uniform float u_bloomStrength;
+        uniform float u_aberration;
+        uniform float u_time;
+
+        // ACES Filmic Tone Mapping
+        vec3 ACESFilm(vec3 x) {
+            float a = 2.51;
+            float b = 0.03;
+            float c = 2.43;
+            float d = 0.59;
+            float e = 0.14;
+            return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+        }
+
+        void main() {
+            vec2 uv = gl_FragCoord.xy / u_resolution;
+
+            // Chromatic aberration
+            float aberr = u_aberration * 0.003;
+            vec2 direction = uv - 0.5;
+            float dist = length(direction);
+
+            vec3 color;
+            color.r = texture2D(u_scene, uv + direction * aberr * dist).r;
+            color.g = texture2D(u_scene, uv).g;
+            color.b = texture2D(u_scene, uv - direction * aberr * dist).b;
+
+            // Add bloom
+            vec3 bloom = texture2D(u_bloom, uv).rgb;
+            color += bloom * u_bloomStrength;
+
+            // HDR tone mapping
+            color = ACESFilm(color * 1.5);
+
+            // Vignette
+            float vignette = 1.0 - dist * 0.5;
+            vignette = smoothstep(0.3, 1.0, vignette);
+            color *= vignette;
+
+            // Subtle film grain
+            float grain = fract(sin(dot(uv * u_time, vec2(12.9898, 78.233))) * 43758.5453);
+            color += (grain - 0.5) * 0.02;
+
+            // Gamma correction
+            color = pow(color, vec3(1.0 / 2.2));
+
+            gl_FragColor = vec4(color, 1.0);
+        }
+    </script>
+
+    <script>
+        // WebGL Setup
+        const canvas = document.getElementById('canvas');
+        const gl = canvas.getContext('webgl', {
+            alpha: false,
+            antialias: true,
+            preserveDrawingBuffer: false
+        });
+
+        if (!gl) {
+            alert('WebGL non supporté !');
+        }
+
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+
+        // State
+        let time = 0;
+        let mouseX = width / 2;
+        let mouseY = height / 2;
+        let speedMultiplier = 1.0;
+        let intensityMultiplier = 1.5;
+        let bloomStrength = 0.8;
+        let aberrationStrength = 0.5;
+        let currentScene = 0;
+        const sceneNames = ['Tunnel', 'Kaleidoscope', 'Morphing', 'Fractal'];
+
+        // Audio
+        let audioContext;
+        let oscillator;
+        let gainNode;
+        let isAudioEnabled = false;
+        let isMantraPlaying = false;
+
+        // Compile shader
+        function compileShader(source, type) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('Shader compilation error:', gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+
+            return shader;
+        }
+
+        // Create program
+        function createProgram(vertexSource, fragmentSource) {
+            const vertexShader = compileShader(vertexSource, gl.VERTEX_SHADER);
+            const fragmentShader = compileShader(fragmentSource, gl.FRAGMENT_SHADER);
+
+            const program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error('Program link error:', gl.getProgramInfoLog(program));
+                return null;
+            }
+
+            return program;
+        }
+
+        // Get shader sources
+        const vertexSource = document.getElementById('vertex-shader').textContent;
+        const mainFragmentSource = document.getElementById('fragment-shader').textContent;
+        const bloomExtractSource = document.getElementById('bloom-extract-shader').textContent;
+        const blurSource = document.getElementById('blur-shader').textContent;
+        const compositeSource = document.getElementById('composite-shader').textContent;
+
+        // Create programs
+        const mainProgram = createProgram(vertexSource, mainFragmentSource);
+        const bloomExtractProgram = createProgram(vertexSource, bloomExtractSource);
+        const blurProgram = createProgram(vertexSource, blurSource);
+        const compositeProgram = createProgram(vertexSource, compositeSource);
+
+        // Create quad buffer
+        const quadBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+            -1, -1,  1, -1,  -1, 1,
+            -1, 1,   1, -1,   1, 1
+        ]), gl.STATIC_DRAW);
+
+        // Create framebuffers
+        function createFramebuffer(width, height) {
+            const framebuffer = gl.createFramebuffer();
+            gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+
+            const texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+
+            gl.bindTexture(gl.TEXTURE_2D, null);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+            return { framebuffer, texture };
+        }
+
+        let sceneFB = createFramebuffer(width, height);
+        let bloomExtractFB = createFramebuffer(width / 2, height / 2);
+        let bloomBlurFB1 = createFramebuffer(width / 2, height / 2);
+        let bloomBlurFB2 = createFramebuffer(width / 2, height / 2);
+
+        // Render function
+        function render(program, framebuffer, setup) {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+            gl.useProgram(program);
+
+            const positionLoc = gl.getAttribLocation(program, 'a_position');
+            gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+            gl.enableVertexAttribArray(positionLoc);
+            gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
+
+            if (setup) setup(program);
+
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            time += 0.01 * speedMultiplier;
+
+            // 1. Render main scene
+            render(mainProgram, sceneFB.framebuffer, (program) => {
+                gl.viewport(0, 0, width, height);
+                gl.uniform2f(gl.getUniformLocation(program, 'u_resolution'), width, height);
+                gl.uniform1f(gl.getUniformLocation(program, 'u_time'), time);
+                gl.uniform2f(gl.getUniformLocation(program, 'u_mouse'), mouseX, mouseY);
+                gl.uniform1f(gl.getUniformLocation(program, 'u_intensity'), intensityMultiplier);
+                gl.uniform1i(gl.getUniformLocation(program, 'u_scene'), currentScene);
+            });
+
+            // 2. Extract bright areas for bloom
+            render(bloomExtractProgram, bloomExtractFB.framebuffer, (program) => {
+                gl.viewport(0, 0, width / 2, height / 2);
+                gl.uniform2f(gl.getUniformLocation(program, 'u_resolution'), width / 2, height / 2);
+                gl.uniform1f(gl.getUniformLocation(program, 'u_threshold'), 0.7);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, sceneFB.texture);
+                gl.uniform1i(gl.getUniformLocation(program, 'u_texture'), 0);
+            });
+
+            // 3. Blur horizontally
+            render(blurProgram, bloomBlurFB1.framebuffer, (program) => {
+                gl.viewport(0, 0, width / 2, height / 2);
+                gl.uniform2f(gl.getUniformLocation(program, 'u_resolution'), width / 2, height / 2);
+                gl.uniform2f(gl.getUniformLocation(program, 'u_direction'), 1.0, 0.0);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, bloomExtractFB.texture);
+                gl.uniform1i(gl.getUniformLocation(program, 'u_texture'), 0);
+            });
+
+            // 4. Blur vertically
+            render(blurProgram, bloomBlurFB2.framebuffer, (program) => {
+                gl.viewport(0, 0, width / 2, height / 2);
+                gl.uniform2f(gl.getUniformLocation(program, 'u_resolution'), width / 2, height / 2);
+                gl.uniform2f(gl.getUniformLocation(program, 'u_direction'), 0.0, 1.0);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, bloomBlurFB1.texture);
+                gl.uniform1i(gl.getUniformLocation(program, 'u_texture'), 0);
+            });
+
+            // 5. Composite final image
+            render(compositeProgram, null, (program) => {
+                gl.viewport(0, 0, width, height);
+                gl.uniform2f(gl.getUniformLocation(program, 'u_resolution'), width, height);
+                gl.uniform1f(gl.getUniformLocation(program, 'u_bloomStrength'), bloomStrength);
+                gl.uniform1f(gl.getUniformLocation(program, 'u_aberration'), aberrationStrength);
+                gl.uniform1f(gl.getUniformLocation(program, 'u_time'), time);
+
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, sceneFB.texture);
+                gl.uniform1i(gl.getUniformLocation(program, 'u_scene'), 0);
+
+                gl.activeTexture(gl.TEXTURE1);
+                gl.bindTexture(gl.TEXTURE_2D, bloomBlurFB2.texture);
+                gl.uniform1i(gl.getUniformLocation(program, 'u_bloom'), 1);
+            });
+        }
+
+        // Audio functions
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playMantra() {
+            if (!isAudioEnabled || isMantraPlaying) return;
+
+            initAudio();
+            isMantraPlaying = true;
+
+            oscillator = audioContext.createOscillator();
+            gainNode = audioContext.createGain();
+
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(136.1, audioContext.currentTime);
+
+            const lfo = audioContext.createOscillator();
+            lfo.frequency.value = 0.5;
+            const lfoGain = audioContext.createGain();
+            lfoGain.gain.value = 10;
+
+            lfo.connect(lfoGain);
+            lfoGain.connect(oscillator.frequency);
+
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.08, audioContext.currentTime + 2);
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.start();
+            lfo.start();
+
+            document.getElementById('toggleMantra').classList.add('active');
+        }
+
+        function stopMantra() {
+            if (oscillator && isMantraPlaying) {
+                gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 1);
+                setTimeout(() => {
+                    oscillator.stop();
+                    isMantraPlaying = false;
+                    document.getElementById('toggleMantra').classList.remove('active');
+                }, 1000);
+            }
+        }
+
+        // Event listeners
+        canvas.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = height - e.clientY;
+        });
+
+        canvas.addEventListener('click', (e) => {
+            if (isAudioEnabled && audioContext) {
+                const clickOsc = audioContext.createOscillator();
+                const clickGain = audioContext.createGain();
+
+                clickOsc.frequency.setValueAtTime(528, audioContext.currentTime);
+                clickGain.gain.setValueAtTime(0.1, audioContext.currentTime);
+                clickGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+                clickOsc.connect(clickGain);
+                clickGain.connect(audioContext.destination);
+
+                clickOsc.start();
+                clickOsc.stop(audioContext.currentTime + 0.5);
+            }
+
+            // Visual feedback
+            intensityMultiplier = Math.min(intensityMultiplier + 0.3, 3.0);
+            setTimeout(() => {
+                intensityMultiplier = Math.max(intensityMultiplier - 0.3, 0.5);
+            }, 200);
+        });
+
+        document.getElementById('toggleSound').addEventListener('click', function() {
+            isAudioEnabled = !isAudioEnabled;
+            if (isAudioEnabled) {
+                initAudio();
+                this.textContent = '🔊 Audio ON';
+                this.classList.add('active');
+            } else {
+                stopMantra();
+                this.textContent = '🔇 Audio OFF';
+                this.classList.remove('active');
+            }
+        });
+
+        document.getElementById('toggleMantra').addEventListener('click', function() {
+            if (!isAudioEnabled) {
+                alert('Activez d\'abord l\'audio !');
+                return;
+            }
+            if (isMantraPlaying) {
+                stopMantra();
+            } else {
+                playMantra();
+            }
+        });
+
+        document.getElementById('speed').addEventListener('input', (e) => {
+            speedMultiplier = parseFloat(e.target.value);
+            document.getElementById('speedValue').textContent = speedMultiplier.toFixed(1);
+        });
+
+        document.getElementById('intensity').addEventListener('input', (e) => {
+            intensityMultiplier = parseFloat(e.target.value);
+            document.getElementById('intensityValue').textContent = intensityMultiplier.toFixed(1);
+        });
+
+        document.getElementById('bloom').addEventListener('input', (e) => {
+            bloomStrength = parseFloat(e.target.value);
+            document.getElementById('bloomValue').textContent = bloomStrength.toFixed(1);
+        });
+
+        document.getElementById('aberration').addEventListener('input', (e) => {
+            aberrationStrength = parseFloat(e.target.value);
+            document.getElementById('aberrationValue').textContent = aberrationStrength.toFixed(2);
+        });
+
+        document.getElementById('prevScene').addEventListener('click', () => {
+            currentScene = (currentScene - 1 + sceneNames.length) % sceneNames.length;
+            document.getElementById('sceneValue').textContent = sceneNames[currentScene];
+        });
+
+        document.getElementById('nextScene').addEventListener('click', () => {
+            currentScene = (currentScene + 1) % sceneNames.length;
+            document.getElementById('sceneValue').textContent = sceneNames[currentScene];
+        });
+
+        window.addEventListener('resize', () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+
+            // Recreate framebuffers
+            sceneFB = createFramebuffer(width, height);
+            bloomExtractFB = createFramebuffer(width / 2, height / 2);
+            bloomBlurFB1 = createFramebuffer(width / 2, height / 2);
+            bloomBlurFB2 = createFramebuffer(width / 2, height / 2);
+        });
+
+        // Start
+        document.getElementById('loading').style.display = 'none';
+        animate();
+
+        console.log('%c✧ CINEMATIC PSYCHEDELIC EXPERIENCE ✧', 'color: #0ff; font-size: 24px; text-shadow: 0 0 10px #0ff; font-weight: bold');
+        console.log('%cWebGL Raymarching | HDR Bloom | ACES Tonemapping | Chromatic Aberration', 'color: #f0f; font-size: 14px');
+    </script>
+</body>
+</html>
